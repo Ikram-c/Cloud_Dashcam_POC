@@ -1,0 +1,99 @@
+sampling:
+  mode: seconds                 # frames | seconds
+  every_n_frames: 30
+  every_n_seconds: 1.0
+  max_frames_per_video: 500
+
+input:
+  crop: null                    # {x0: , y0: , x1: , y1: } to exclude OSD burn-in
+  sample: null                  # {duration_seconds: , offset_seconds: }
+  metadata_source: auto         # auto | container | filename | none
+
+quality:
+  enabled: true
+  blur_threshold: 60.0
+  min_mean_intensity: 25.0
+  max_mean_intensity: 235.0
+  duplicate_threshold: 0.012
+  analysis_size: [320, 240]
+
+intrinsic:
+  enabled: false
+  min_frames: 5
+  max_frames: 30
+  log_epsilon: 1.0
+
+telemetry:
+  gpx_path: null                # local .gpx; null -> use GCS
+  gcs_bucket: null
+  gcs_blob: null
+  use_mock_gcs: true
+
+illumination:
+  enabled: true
+  timezone: Europe/London
+  fixed_lat: 52.45              # fallback when no telemetry resolves
+  fixed_lon: 1.73
+  gnss_tolerance_s: 300.0
+  forecast_provider: open_meteo # open_meteo | none
+  forecast_url: https://api.open-meteo.com/v1/forecast
+  forecast_archive_url: https://archive-api.open-meteo.com/v1/archive
+  forecast_max_past_days: 7
+  http_timeout_s: 10
+  cache_path: forecast_cache.json
+  clear_sky_log_intensity: 4.9
+  night_log_intensity: 2.3
+  cloud_attenuation_log: 0.5
+  twilight_elevation_deg: -4.0
+  min_sun_factor: 0.15
+  probe: ground                 # ground | vehicle | both | none
+  ground_patch_frac: [0.35, 0.70, 0.65, 0.92]
+  vehicle_model_prototxt: null
+  vehicle_model_weights: null
+  vehicle_confidence: 0.5
+  vehicle_iou_min: 0.3
+  vehicle_min_track_frames: 3
+  fusion_gain: 0.2
+  exposure_tolerance_stops: 1.5
+  confidence_base: 0.4
+  confidence_per_probe: 0.3
+  normalize_output: false
+
+coverage:
+  enabled: false
+  chunk_manifest_name: coverage_chunks.yaml
+  network: vodafone
+  networks:                     # carrier: {zone: [lon0, lat0, lon1, lat1]}
+    vodafone:
+      urban_4g: [-1.60, 53.79, -1.53, 53.82]
+      rural_edge: [-1.53, 53.79, -1.48, 53.82]
+    o2:
+      urban_4g: [-1.61, 53.785, -1.52, 53.825]
+    ee:
+      urban_5g: [-1.58, 53.795, -1.54, 53.815]
+      urban_4g: [-1.62, 53.78, -1.50, 53.83]
+    three:
+      urban_4g: [-1.59, 53.79, -1.53, 53.81]
+
+output:
+  image_format: png             # png | jpg
+  jpeg_quality: 90
+  resize_width: null
+  manifest_name: frame_manifest.csv
+  export_kept_slices: true
+
+runtime:
+  video_directory: videos
+  output_directory: extracted_frames
+  video_extensions: [.mp4, .mov, .avi, .mkv]
+  default_fps: 30.0
+  max_video_frames: 100000
+  max_video_files: 500
+  max_consecutive_fails: 25
+  num_workers: 0
+  parse_filenames: true
+
+ui:
+  host: 127.0.0.1
+  port: 8321
+  thumbnail_width: 320
