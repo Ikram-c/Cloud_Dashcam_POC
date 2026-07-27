@@ -7,6 +7,8 @@ name = "Cloud_Dashcam_POC"
 version = "0.5.1"
 description = "Quality-gated, illumination-aware, coverage-chunked frame extraction"
 requires-python = ">=3.11"
+license = {file = "LICENSE"}
+authors = [{name = "Ikram Choudhury"}]
 dependencies = [
     "numpy>=1.26",
     "opencv-python>=4.9",
@@ -20,6 +22,7 @@ metadata = ["pymediainfo>=6.0"]
 ui = ["fastapi>=0.110", "uvicorn>=0.29"]
 coverage = ["gpxpy>=1.6", "networkx>=3.0"]
 gcs = ["google-cloud-storage>=2.14"]
+pythonanywhere = ["a2wsgi>=1.10", "Cloud_Dashcam_POC[ui,coverage]"]
 # dev now pulls in every extra the test suite touches, so a single
 # `uv sync --extra dev` (or `pip install -e ".[dev]"`) makes the whole
 # suite runnable: fastapi+httpx for test_webapp, gpxpy+networkx for

@@ -6,7 +6,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY pyproject.toml ./
+COPY pyproject.toml LICENSE ./
 COPY src ./src
 COPY config.docker.yaml ./config.yaml
 
