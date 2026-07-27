@@ -46,8 +46,10 @@ def settings(tmp_path):
         networks={"testnet": {"zone_a": (0.0, 0.0, 10.0, 10.0)}},
     )
     runtime = replace(base.runtime, output_directory=str(tmp_path))
+    illumination = replace(base.illumination, timezone="UTC")
     return replace(
         base, telemetry=telemetry, coverage=coverage, runtime=runtime,
+        illumination=illumination,
     )
 
 

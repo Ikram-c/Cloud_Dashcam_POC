@@ -108,6 +108,12 @@ def subdivide_route_fast(graph: nx.DiGraph, coverage_zones: Dict[str, tuple]) ->
     edges_list = list(graph.edges)
     for i, (u, v) in enumerate(edges_list):
         bbox = build_bounding_box(graph.nodes[u]["coords"], graph.nodes[v]["coords"])
+        # Inflate by a hair: an axis-aligned edge has a zero-height or
+        # zero-width bbox, which the sweep-line pruning would treat as
+        # covering no area and silently drop. Edges are only pruning
+        # candidates here; Liang-Barsky still computes exact crossings.
+        pad = 1e-9
+        bbox = (bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad)
         rectangles.append(bbox)
         rect_mapping[offset + i] = {"type": "edge", "u": u, "v": v}
 

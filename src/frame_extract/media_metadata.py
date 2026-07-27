@@ -1,171 +1,126 @@
-"""Reflectance recovery over static segments, after Weiss (2001).
+"""Container-metadata probing for start time and GPS position.
 
-Given T frames with constant reflectance and varying illumination,
-the ML estimate of the reflectance image under a Laplacian prior on
-illumination derivative-filter outputs is: filter each log frame
-with horizontal and vertical derivative filters, take the pixelwise
-temporal median of each filter output, then invert the filtering via
-the pseudo-inverse (a Poisson-type reconstruction in the Fourier
-domain).
-
-Reference:
-    Weiss, Y. (2001). "Deriving intrinsic images from image
-    sequences." Proceedings of ICCV 2001.
-
-Validity: the estimator assumes a stationary camera and scene. It is
-applied only to static segments detected by the duplicate gate; it
-must not be applied to moving footage.
+Reconstructed module: the repository's copy of this file was
+overwritten by the intrinsic (Weiss) module in a bad commit. The
+public surface is defined by its call site
+(``extractor.resolve_start_datetime``: ``dt, _ = probe(path)``) and
+the README: ``pymediainfo`` reads the container's ``encoded_date``
+(and GPS xyz tag when present); without the library or the native
+libmediainfo, probing degrades to (None, None) and timestamp
+resolution falls back to filename parsing.
 """
 
 import logging
-from typing import List, Optional
-
-import numpy as np
-
-from .config import IntrinsicConfig
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+try:
+    from pymediainfo import MediaInfo
+    MEDIAINFO_AVAILABLE = True
+except (ImportError, OSError):  # OSError: native libmediainfo missing
+    MEDIAINFO_AVAILABLE = False
 
-class WeissReflectanceEstimator:
-    """Accumulates a static segment and emits one reflectance frame."""
+_DATE_FORMATS = (
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y/%m/%d %H:%M:%S",
+)
+_XYZ_PATTERN = re.compile(
+    r"(?P<lat>[+-]\d+(?:\.\d+)?)(?P<lon>[+-]\d+(?:\.\d+)?)"
+)
+_warned_unavailable = False
 
-    def __init__(self, config: IntrinsicConfig):
-        """Initialise the estimator.
 
-        Args:
-            config (IntrinsicConfig): Validated intrinsic parameters.
-        """
-        self.config = config
-        self._log_frames: List[np.ndarray] = []
-        self._shape: Optional[tuple] = None
+def _parse_encoded_date(raw: str) -> Optional[datetime]:
+    """Parse a MediaInfo date string into an aware UTC datetime.
 
-    def reset(self):
-        """Discard the current segment buffer."""
-        self._log_frames = []
-        self._shape = None
+    MediaInfo emits variants like ``UTC 2024-03-15 08:30:00``,
+    ``2024-03-15 08:30:00 UTC``, or a bare local-looking timestamp;
+    bare timestamps are treated as UTC (containers rarely say).
 
-    @property
-    def frame_count(self) -> int:
-        """Number of frames currently buffered.
+    Args:
+        raw (str): The raw tag value.
 
-        Returns:
-            int: Buffer length.
-        """
-        return len(self._log_frames)
+    Returns:
+        Optional[datetime]: Aware UTC datetime, or None on failure.
+    """
+    text = raw.strip()
+    utc_tagged = "UTC" in text.upper()
+    text = re.sub(r"\bUTC\b", "", text, flags=re.IGNORECASE).strip()
+    text = text.rstrip("Zz").strip()
+    for fmt in _DATE_FORMATS:
+        try:
+            dt = datetime.strptime(text, fmt)
+            return dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    if not utc_tagged:
+        logger.debug("Unparseable container date: %r", raw)
+    return None
 
-    @property
-    def ready(self) -> bool:
-        """Whether enough frames are buffered for a reliable estimate.
 
-        Returns:
-            bool: True if the minimum segment length is met.
-        """
-        return len(self._log_frames) >= self.config.min_frames
+def _parse_xyz(raw: str) -> Optional[Tuple[float, float]]:
+    """Parse an ISO 6709 xyz tag like ``+52.4500+001.7300/``.
 
-    def add_frame(self, frame_bgr: np.ndarray) -> bool:
-        """Buffer one frame of a static segment.
+    Args:
+        raw (str): The raw tag value.
 
-        Args:
-            frame_bgr (np.ndarray): BGR frame (post-crop).
+    Returns:
+        Optional[Tuple[float, float]]: (lat, lon), or None.
+    """
+    match = _XYZ_PATTERN.search(raw.strip())
+    if match is None:
+        return None
+    try:
+        return float(match.group("lat")), float(match.group("lon"))
+    except ValueError:
+        return None
 
-        Returns:
-            bool: True if buffered; False if the buffer is full.
 
-        Raises:
-            ValueError: If the frame is empty or shape-inconsistent.
-        """
-        if frame_bgr.size == 0:
-            raise ValueError("frame must be non-empty")
-        if self._shape is not None and frame_bgr.shape != self._shape:
-            raise ValueError("all frames in a segment must share a shape")
-        if len(self._log_frames) >= self.config.max_frames:
-            return False
-        self._shape = frame_bgr.shape
-        self._log_frames.append(
-            np.log(frame_bgr.astype(np.float32) + self.config.log_epsilon)
-        )
-        return True
+def probe(
+    video_path: Path,
+) -> Tuple[Optional[datetime], Optional[Tuple[float, float]]]:
+    """Read the recording start time and GPS position from a container.
 
-    def estimate_reflectance(self) -> Optional[np.ndarray]:
-        """Compute the ML reflectance image for the buffered segment.
+    Args:
+        video_path (Path): The video file.
 
-        Per channel: median over time of horizontal and vertical
-        log-gradients, then Fourier-domain pseudo-inverse
-        reconstruction; the DC level lost under differentiation is
-        restored from the temporal mean.
-
-        Returns:
-            Optional[np.ndarray]: uint8 BGR reflectance image, or
-                None if fewer than min_frames are buffered.
-        """
-        if not self.ready:
-            logger.debug(
-                "Segment too short for reflectance (%d/%d)",
-                len(self._log_frames), self.config.min_frames,
+    Returns:
+        Tuple[Optional[datetime], Optional[Tuple[float, float]]]:
+            (aware UTC start time or None, (lat, lon) or None). Both
+            are None when pymediainfo/libmediainfo is unavailable, the
+            file is unreadable, or the tags are absent - the caller
+            then falls back to filename parsing.
+    """
+    global _warned_unavailable
+    if not MEDIAINFO_AVAILABLE:
+        if not _warned_unavailable:
+            logger.info(
+                "pymediainfo/libmediainfo unavailable; container metadata "
+                "disabled, falling back to filename timestamps"
             )
-            return None
-        stack = np.stack(self._log_frames, axis=0)
-        channels = [
-            self._estimate_channel(stack[:, :, :, c]) for c in range(stack.shape[3])
-        ]
-        log_r = np.stack(channels, axis=2)
-        reflectance = np.exp(log_r) - self.config.log_epsilon
-        return np.clip(reflectance, 0, 255).astype(np.uint8)
-
-    @staticmethod
-    def _estimate_channel(log_stack: np.ndarray) -> np.ndarray:
-        """Recover one log-reflectance channel.
-
-        Args:
-            log_stack (np.ndarray): (T, H, W) log frames.
-
-        Returns:
-            np.ndarray: (H, W) log-reflectance channel.
-        """
-        dx = log_stack[:, :, 1:] - log_stack[:, :, :-1]
-        dy = log_stack[:, 1:, :] - log_stack[:, :-1, :]
-        med_dx = np.median(dx, axis=0)
-        med_dy = np.median(dy, axis=0)
-        h, w = log_stack.shape[1:]
-        gx = np.zeros((h, w), dtype=np.float32)
-        gy = np.zeros((h, w), dtype=np.float32)
-        gx[:, 1:] = med_dx
-        gy[1:, :] = med_dy
-        log_r = WeissReflectanceEstimator._poisson_solve(gx, gy)
-        log_r += float(np.mean(log_stack)) - float(np.mean(log_r))
-        return log_r
-
-    @staticmethod
-    def _poisson_solve(gx: np.ndarray, gy: np.ndarray) -> np.ndarray:
-        """Pseudo-inverse reconstruction from median gradients.
-
-        Solves Weiss's equation (6) in the Fourier domain: the image
-        whose forward-difference gradients best match (gx, gy) in the
-        least-squares sense.
-
-        Note: the FFT inversion assumes periodic image boundaries, so
-        non-periodic scenes acquire a small seam bias at the image
-        edges. Acceptable for Weiss reconstruction; do not rely on
-        edge rows/columns of the output.
-
-        Args:
-            gx (np.ndarray): Median horizontal log-gradient field.
-            gy (np.ndarray): Median vertical log-gradient field.
-
-        Returns:
-            np.ndarray: Reconstructed log image (zero-mean DC).
-        """
-        h, w = gx.shape
-        fx = np.zeros((h, w), dtype=np.float32)
-        fy = np.zeros((h, w), dtype=np.float32)
-        fx[0, 0], fx[0, -1] = 1.0, -1.0
-        fy[0, 0], fy[-1, 0] = 1.0, -1.0
-        fx_f = np.fft.fft2(fx)
-        fy_f = np.fft.fft2(fy)
-        denom = np.abs(fx_f) ** 2 + np.abs(fy_f) ** 2
-        denom[0, 0] = 1.0
-        numer = np.conj(fx_f) * np.fft.fft2(gx) + np.conj(fy_f) * np.fft.fft2(gy)
-        r_f = numer / denom
-        r_f[0, 0] = 0.0
-        return np.real(np.fft.ifft2(r_f)).astype(np.float32)
+            _warned_unavailable = True
+        return None, None
+    try:
+        info = MediaInfo.parse(str(video_path))
+    except (OSError, RuntimeError, ValueError) as e:
+        logger.debug("MediaInfo failed for %s: %s", video_path.name, e)
+        return None, None
+    dt: Optional[datetime] = None
+    gps: Optional[Tuple[float, float]] = None
+    for track in info.tracks:
+        if track.track_type != "General":
+            continue
+        for attr in ("encoded_date", "tagged_date", "recorded_date"):
+            raw = getattr(track, attr, None)
+            if raw and dt is None:
+                dt = _parse_encoded_date(str(raw))
+        raw_xyz = getattr(track, "xyz", None)
+        if raw_xyz and gps is None:
+            gps = _parse_xyz(str(raw_xyz))
+        break
+    return dt, gps
