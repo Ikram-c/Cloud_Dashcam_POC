@@ -1,0 +1,23 @@
+# Build + push the demo web app image with Cloud Build (no local Docker
+# needed). The Artifact Registry repo must exist first — see DEPLOY.md.
+#
+#   gcloud builds submit --config cloudbuild.web.yaml
+#
+# Override region/repo/tag if desired:
+#   gcloud builds submit --config cloudbuild.web.yaml \
+#     --substitutions _REGION=europe-west2,_REPO=dashcam,_TAG=v2
+substitutions:
+  _REGION: us-central1
+  _REPO: dashcam
+  _TAG: latest
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.web
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/dashcam-web:${_TAG}
+      - .
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/dashcam-web:${_TAG}

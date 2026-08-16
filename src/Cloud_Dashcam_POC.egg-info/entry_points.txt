@@ -1,0 +1,4 @@
+[console_scripts]
+frame-extract = frame_extract.cli:main
+frame-extract-splash = frame_extract.webapp.splash:main
+frame-extract-ui = frame_extract.webapp.server:main

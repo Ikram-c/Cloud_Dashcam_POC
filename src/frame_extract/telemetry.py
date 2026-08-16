@@ -1,0 +1,80 @@
+"""Single GPX telemetry source shared by illumination and coverage.
+
+One provider per pipeline run resolves the track exactly once: a
+local path when configured, otherwise a GCS download (real or mock),
+then gpxpy parsing into ordered timestamped nodes. Both consumers see
+the identical node list, so illumination lookups and coverage
+intervals can never disagree about where the vehicle was.
+"""
+
+import logging
+from pathlib import Path
+from typing import List, Optional
+
+from .cloud import download_gpx_track, get_storage_client
+from .config import Settings
+from .gpx_telemetry import TrackNode, parse_gpx_to_nodes
+
+logger = logging.getLogger(__name__)
+
+TRACK_FILENAME = "telemetry_track.gpx"
+
+
+class TelemetryProvider:
+    """Resolves, downloads if needed, and caches the GPX track."""
+
+    def __init__(self, settings: Settings, storage_client=None):
+        """Store config and the optional injected storage client.
+
+        Args:
+            settings (Settings): Root configuration.
+            storage_client: Injected GCS client (real or mock); when
+                None and GCS is configured, one is created from the
+                use_mock_gcs flag at first use.
+        """
+        self.config = settings.telemetry
+        self._client = storage_client
+        self._nodes: Optional[List[TrackNode]] = None
+
+    @property
+    def configured(self) -> bool:
+        """Whether any telemetry source is configured.
+
+        Returns:
+            bool: True when a local path or a full GCS source exists.
+        """
+        return self.config.gpx_path is not None or (
+            self.config.gcs_bucket is not None
+            and self.config.gcs_blob is not None
+        )
+
+    def nodes(self, output_root: Path) -> List[TrackNode]:
+        """Return the parsed track nodes, resolving on first call.
+
+        Args:
+            output_root (Path): Directory for a downloaded track.
+
+        Returns:
+            List[TrackNode]: Ordered timestamped nodes.
+
+        Raises:
+            ValueError: If no telemetry source is configured, or the
+                file contains no usable points.
+            ImportError: If gpxpy (or the real GCS client) is missing.
+            FileNotFoundError: If a configured local path is missing.
+        """
+        if self._nodes is not None:
+            return self._nodes
+        if not self.configured:
+            raise ValueError("telemetry requires gpx_path or gcs_bucket+gcs_blob")
+        if self.config.gpx_path is not None:
+            path = Path(self.config.gpx_path)
+        else:
+            client = self._client or get_storage_client(self.config.use_mock_gcs)
+            path = download_gpx_track(
+                client, self.config.gcs_bucket, self.config.gcs_blob,
+                output_root / TRACK_FILENAME,
+            )
+        self._nodes = parse_gpx_to_nodes(path)
+        logger.info("Telemetry: %d GPX fixes from %s", len(self._nodes), path)
+        return self._nodes

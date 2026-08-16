@@ -1,0 +1,5 @@
+source_video: /Users/ikramchoudhury/Cloud_Dashcam_POC/mock_dashcam_out/fixtures/videos/CAR01_20240315_120000_CAM01.mp4
+every: 30
+slices:
+- start: 0
+  end: 151

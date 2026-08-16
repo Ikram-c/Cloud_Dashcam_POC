@@ -1,0 +1,31 @@
+# Demo web app image: hosts the frame-extract web control panel
+# (welcome -> demo -> configure -> processing -> results) for Cloud Run.
+#
+#   gcloud builds submit --config cloudbuild.web.yaml
+#   gcloud run deploy dashcam-demo --image <that image> ...   (see DEPLOY.md)
+#
+# The "Run Local Demo" flow works entirely in-container: synthetic
+# fixtures are pre-generated at build time, telemetry uses the bundled
+# GPX track, and the forecast degrades gracefully offline.
+FROM python:3.11-slim
+
+# libgl1/libglib2.0-0: opencv-python (pyproject dep) links libGL.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . /app
+
+RUN pip install --no-cache-dir -e ".[ui,coverage]"
+
+# Pre-generate the demo fixtures the panel's "Run Local Demo" button
+# expects at ./test_data (videos + GPX track).
+RUN python scripts/make_test_data.py \
+    && ls test_data/videos/*.mp4 >/dev/null  # fail the build if encoding failed
+
+ENV PYTHONUNBUFFERED=1
+EXPOSE 8080
+
+# Cloud Run injects PORT; bind all interfaces inside the container.
+CMD ["sh", "-c", "frame-extract-ui --config config.yaml --host 0.0.0.0 --port ${PORT:-8080}"]

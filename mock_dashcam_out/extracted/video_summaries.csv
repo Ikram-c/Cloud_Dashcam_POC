@@ -1,0 +1,5 @@
+video_path,vehicle,camera_id,file_datetime,fps,total_frames,frames_sampled,frames_kept,frames_rejected_blur,frames_rejected_exposure,frames_rejected_duplicate,reflectance_frames
+/Users/ikramchoudhury/Cloud_Dashcam_POC/mock_dashcam_out/fixtures/videos/CAR01_20240315_083000_CAM01.mp4,CAR01,CAM01,2024-03-15 08:30:00,30.0,180,6,6,0,0,0,0
+/Users/ikramchoudhury/Cloud_Dashcam_POC/mock_dashcam_out/fixtures/videos/CAR01_20240315_103000_CAM01.mp4,CAR01,CAM01,2024-03-15 10:30:00,30.0,180,6,0,6,0,0,0
+/Users/ikramchoudhury/Cloud_Dashcam_POC/mock_dashcam_out/fixtures/videos/CAR01_20240315_120000_CAM01.mp4,CAR01,CAM01,2024-03-15 12:00:00,30.0,180,6,6,0,0,0,0
+/Users/ikramchoudhury/Cloud_Dashcam_POC/mock_dashcam_out/fixtures/videos/CAR01_20240316_020000_CAM01.mp4,CAR01,CAM01,2024-03-16 02:00:00,30.0,180,6,0,6,0,0,0

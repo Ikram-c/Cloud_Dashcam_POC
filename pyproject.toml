@@ -8,9 +8,12 @@ version = "0.5.0"
 description = "Quality-gated, illumination-aware, coverage-chunked frame extraction"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.139.2",
+    "httpx2>=2.7.0",
     "numpy>=1.26",
     "opencv-python>=4.9",
     "pandas>=2.1",
+    "pytest>=9.1.1",
     "pyyaml>=6.0",
     "requests>=2.31",
 ]
@@ -20,11 +23,23 @@ metadata = ["pymediainfo>=6.0"]
 ui = ["fastapi>=0.110", "uvicorn>=0.29"]
 coverage = ["gpxpy>=1.6", "networkx>=3.0"]
 gcs = ["google-cloud-storage>=2.14"]
+cloud = ["google-cloud-aiplatform>=1.43", "google-cloud-storage>=2.14"]
 dev = ["pytest>=8.0", "httpx>=0.27"]
 
 [project.scripts]
 frame-extract = "frame_extract.cli:main"
 frame-extract-ui = "frame_extract.webapp.server:main"
+frame-extract-splash = "frame_extract.webapp.splash:main"
+
+[tool.uv]
+# cryptography (pulled in via the gcs extra: google-cloud-storage ->
+# google-auth) ships no prebuilt wheel for some platforms (e.g. Intel macOS
+# on new CPythons), and its source build needs Rust + pkg-config + OpenSSL.
+# Never build it from source; resolve to the newest version with a wheel.
+no-build-package = ["cryptography"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"frame_extract.webapp" = ["*.html"]

@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud Optimised DashCam</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --edge: #30363d;
+    --text: #e6edf3; --dim: #8b949e;
+    --accent: #58a6ff; --green: #3fb950; --amber: #d29922; --red: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center; min-height: 100vh;
+  }
+  main { width: min(880px, 94vw); padding: 40px 0 60px; }
+  h1 { font-size: 26px; font-weight: 600; margin: 0 0 4px; }
+  h2 { font-size: 19px; font-weight: 600; margin: 0 0 14px; }
+  .sub { color: var(--dim); margin-bottom: 28px; }
+  .screen { display: none; }
+  .screen.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
+  .card {
+    background: var(--panel); border: 1px solid var(--edge);
+    border-radius: 12px; padding: 22px; margin-bottom: 18px;
+  }
+  button {
+    background: var(--accent); border: 0; color: #04121f; font-weight: 600;
+    padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 15px;
+  }
+  button.secondary { background: transparent; color: var(--accent);
+    border: 1px solid var(--edge); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  label.field { display: block; margin: 10px 0 2px; color: var(--dim); font-size: 13px; }
+  input[type=text], select {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--edge); border-radius: 8px; padding: 8px 10px; font-size: 14px;
+  }
+  .gates { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .gate { display: flex; gap: 8px; align-items: center; background: var(--bg);
+    border: 1px solid var(--edge); border-radius: 8px; padding: 8px 10px; }
+  .bar { height: 10px; background: var(--bg); border: 1px solid var(--edge);
+    border-radius: 6px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0%; background: var(--accent); transition: width .3s; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--edge); }
+  th { color: var(--dim); font-weight: 500; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .chip { background: rgba(63,185,80,.15); color: var(--green);
+    border: 1px solid rgba(63,185,80,.4); border-radius: 999px;
+    padding: 3px 12px; font-size: 13px; }
+  .notice { color: var(--amber); font-size: 13px; margin-top: 8px; }
+  .error { color: var(--red); }
+  /* ---- footage review player + overlay ---- */
+  .player { position: relative; background: #000; border-radius: 10px; overflow: hidden; }
+  .player video { display: block; width: 100%; }
+  .player canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    pointer-events: none; opacity: .55;
+  }
+  .overlay-controls { margin-top: 10px; }
+  .overlay-controls label { color: var(--dim); font-size: 13px; }
+  a.back { color: var(--dim); font-size: 13px; text-decoration: none; cursor: pointer; }
+  a.back:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cloud Optimised DashCam</h1>
+  <div class="sub">Quality-gated, illumination-aware, coverage-chunked frame extraction</div>
+
+  <!-- 1 · welcome -->
+  <section class="screen active" id="screen-welcome">
+    <div class="card">
+      <h2>Get started</h2>
+      <p class="sub">Run the bundled synthetic fixtures with mock telemetry, process
+        your own footage, or review footage against the last run's processing timeline.</p>
+      <div class="row">
+        <button id="btn-demo">Run Local Demo</button>
+        <button class="secondary" id="btn-configure">Select Video File</button>
+        <button class="secondary" id="btn-review">Review Footage</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · configure -->
+  <section class="screen" id="screen-configure">
+    <a class="back" data-goto="screen-welcome">&larr; Back</a>
+    <div class="card">
+      <h2>Select Video File</h2>
+      <label class="field">Video directory (server path)</label>
+      <input type="text" id="in-videos" placeholder="e.g. /data/survey_2024_03">
+      <label class="field">Output directory (server path)</label>
+      <input type="text" id="in-output" placeholder="e.g. /data/extracted">
+      <label class="field">GPX telemetry</label>
+      <select id="in-gpx">
+        <option value="config">As configured in config.yaml</option>
+        <option value="local">Local GPX path&hellip;</option>
+        <option value="mock">Mock GCS (synthetic track)</option>
+        <option value="none">None (fixed-location fallback)</option>
+      </select>
+      <input type="text" id="in-gpx-path" placeholder="/data/tracks/day1.gpx" style="display:none; margin-top:8px">
+      <label class="field">Mobile network</label>
+      <select id="in-network"></select>
+      <label class="field">Sampling</label>
+      <select id="in-sampling">
+        <option value="">As configured</option>
+        <option value="seconds_1">Every 1 s</option>
+        <option value="seconds_2">Every 2 s</option>
+        <option value="frames_30">Every 30 frames</option>
+        <option value="frames_10">Every 10 frames</option>
+      </select>
+      <label class="field">Gates (can only disable what config enables)</label>
+      <div class="gates" id="gates">
+        <label class="gate"><input type="checkbox" data-gate="blur" checked> Blur</label>
+        <label class="gate"><input type="checkbox" data-gate="exposure" checked> Exposure</label>
+        <label class="gate"><input type="checkbox" data-gate="duplicate" checked> Duplicate</label>
+        <label class="gate"><input type="checkbox" data-gate="illumination" checked> Illumination</label>
+        <label class="gate"><input type="checkbox" data-gate="weiss" checked> Weiss</label>
+        <label class="gate"><input type="checkbox" data-gate="coverage" checked> Coverage</label>
+      </div>
+      <div class="row" style="margin-top:18px">
+        <button id="btn-start">Start Extraction</button>
+        <span id="configure-error" class="error"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · processing -->
+  <section class="screen" id="screen-processing">
+    <div class="card">
+      <h2>Processing&hellip;</h2>
+      <p class="sub" id="processing-video">Starting pipeline&hellip;</p>
+      <div class="bar"><div id="progress-fill"></div></div>
+      <p class="sub" id="progress-label" style="margin-top:8px">0%</p>
+    </div>
+  </section>
+
+  <!-- 4 · complete -->
+  <section class="screen" id="screen-complete">
+    <a class="back" data-goto="screen-welcome">&larr; Start over</a>
+    <div class="card">
+      <h2>Processing Complete</h2>
+      <div id="complete-error" class="error"></div>
+      <table id="summary-table" style="display:none">
+        <thead><tr>
+          <th>Video</th><th>Sampled</th><th>Kept</th><th>Blur</th>
+          <th>Exposure</th><th>Duplicate</th><th>Reflectance</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="chips" id="zone-chips"></div>
+      <div class="row" style="margin-top:18px">
+        <button id="btn-to-review">Review Footage with Overlay</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · footage review with processing overlay -->
+  <section class="screen" id="screen-review">
+    <a class="back" data-goto="screen-welcome">&larr; Back</a>
+    <div class="card">
+      <h2>Footage review</h2>
+      <p class="sub">Post a video of your footage; a semi-transparent chart replays
+        how the pipeline would process it in real time &mdash; frames captured,
+        chunks created, and data upstreamed per coverage window.</p>
+      <div class="row">
+        <input type="file" id="review-file" accept="video/*">
+      </div>
+      <div class="notice" id="review-notice" style="display:none"></div>
+      <div class="player" id="player" style="display:none; margin-top:14px">
+        <video id="review-video" controls playsinline></video>
+        <canvas id="overlay-canvas"></canvas>
+      </div>
+      <div class="overlay-controls row" id="overlay-controls" style="display:none">
+        <label class="gate" style="margin:0">
+          <input type="checkbox" id="overlay-toggle" checked> Processing overlay
+        </label>
+        <label>Opacity
+          <input type="range" id="overlay-opacity" min="15" max="95" value="55">
+        </label>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const screens = document.querySelectorAll(".screen");
+function show(id) {
+  screens.forEach((s) => s.classList.toggle("active", s.id === id));
+}
+document.querySelectorAll("a.back").forEach((a) =>
+  a.addEventListener("click", () => show(a.dataset.goto)));
+
+/* ---------- networks dropdown ---------- */
+async function loadNetworks() {
+  try {
+    const res = await fetch("/api/networks");
+    if (!res.ok) return;
+    const body = await res.json();
+    const sel = $("in-network");
+    sel.innerHTML = "";
+    body.networks.forEach((n) => {
+      const opt = document.createElement("option");
+      opt.value = n; opt.textContent = n;
+      if (n === body.default) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch (e) { /* panel still usable without the dropdown */ }
+}
+loadNetworks();
+
+$("in-gpx").addEventListener("change", () => {
+  $("in-gpx-path").style.display =
+    $("in-gpx").value === "local" ? "block" : "none";
+});
+
+/* ---------- launch ---------- */
+function gatePayload() {
+  const gates = {};
+  document.querySelectorAll("#gates input").forEach((cb) => {
+    gates[cb.dataset.gate] = cb.checked;
+  });
+  return gates;
+}
+
+async function launch(payload) {
+  $("configure-error").textContent = "";
+  const res = await fetch("/api/extract", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = (await res.json().catch(() => ({}))).detail || res.statusText;
+    $("configure-error").textContent = detail;
+    if (res.status === 409) { show("screen-processing"); poll(); }
+    return;
+  }
+  show("screen-processing");
+  poll();
+}
+
+$("btn-demo").addEventListener("click", () =>
+  launch({
+    videos: "test_data/videos",
+    output: "extracted_frames",
+    gpx_source: "local",
+    gpx_path: "test_data/track.gpx",
+    gates: gatePayload(),
+  }));
+$("btn-configure").addEventListener("click", () => show("screen-configure"));
+$("btn-review").addEventListener("click", () => show("screen-review"));
+$("btn-to-review").addEventListener("click", () => show("screen-review"));
+$("btn-start").addEventListener("click", () => {
+  const payload = { gates: gatePayload() };
+  if ($("in-videos").value) payload.videos = $("in-videos").value;
+  if ($("in-output").value) payload.output = $("in-output").value;
+  if ($("in-sampling").value) payload.sampling = $("in-sampling").value;
+  if ($("in-network").value) payload.network = $("in-network").value;
+  const gpx = $("in-gpx").value;
+  if (gpx !== "config") {
+    payload.gpx_source = gpx;
+    if (gpx === "local") payload.gpx_path = $("in-gpx-path").value;
+  }
+  launch(payload);
+});
+
+/* ---------- progress polling ---------- */
+let pollTimer = null;
+function poll() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    const res = await fetch("/api/status");
+    if (!res.ok) return;
+    const s = await res.json();
+    const pct = Math.round(s.progress * 100);
+    $("progress-fill").style.width = pct + "%";
+    $("progress-label").textContent = pct + "%";
+    if (s.video) $("processing-video").textContent = "Processing " + s.video;
+    if (s.state === "done" || s.state === "failed") {
+      clearInterval(pollTimer);
+      renderComplete(s);
+      show("screen-complete");
+    }
+  }, 400);
+}
+
+function renderComplete(s) {
+  $("complete-error").textContent =
+    s.state === "failed" ? "Pipeline failed: " + (s.error || "unknown error") : "";
+  const table = $("summary-table");
+  const tbody = table.querySelector("tbody");
+  tbody.innerHTML = "";
+  (s.summaries || []).forEach((v) => {
+    const tr = document.createElement("tr");
+    [v.video, v.sampled, v.kept, v.blur, v.exposure, v.duplicate, v.reflectance]
+      .forEach((cell) => {
+        const td = document.createElement("td");
+        td.textContent = cell;
+        tr.appendChild(td);
+      });
+    tbody.appendChild(tr);
+  });
+  table.style.display = (s.summaries || []).length ? "table" : "none";
+  const chips = $("zone-chips");
+  chips.innerHTML = "";
+  Object.entries(s.zones || {}).forEach(([zone, count]) => {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = `${zone} · ${count} chunk${count === 1 ? "" : "s"}`
+      + (s.network ? ` (${s.network})` : "");
+    chips.appendChild(chip);
+  });
+}
+
+/* ---------- footage review: semi-transparent processing overlay ------
+   Timeline data comes from the last real pipeline run (/api/timeline):
+   frame capture times + real on-disk sizes, chunk boundaries from
+   kept_slices.yaml, upstream windows from coverage_chunks.yaml. The
+   chart reveals itself in step with video playback. ------------------ */
+const video = $("review-video");
+const canvas = $("overlay-canvas");
+const ctx = canvas.getContext("2d");
+let timeline = null;          // /api/timeline payload
+let uploadCurve = [];         // [{t, bytes}] simulated drain over windows
+let rafId = null;
+
+$("review-file").addEventListener("change", async (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  video.src = URL.createObjectURL(file);
+  $("player").style.display = "block";
+  $("overlay-controls").style.display = "flex";
+  const stem = file.name.replace(/\.[^.]+$/, "");
+  await loadTimeline(stem);
+  draw();
+});
+
+async function loadTimeline(stem) {
+  timeline = null;
+  uploadCurve = [];
+  const notice = $("review-notice");
+  notice.style.display = "none";
+  try {
+    const res = await fetch("/api/timeline?video=" + encodeURIComponent(stem));
+    if (res.status === 404) {
+      notice.textContent = "No pipeline artifacts found — run the demo or an "
+        + "extraction first, then post the same footage here.";
+      notice.style.display = "block";
+      return;
+    }
+    if (!res.ok) throw new Error(res.statusText);
+    timeline = await res.json();
+    if (!timeline.matched) {
+      notice.textContent = `No run data for “${stem}” — showing the `
+        + `processing timeline of “${timeline.video}” instead.`;
+      notice.style.display = "block";
+    }
+    buildUploadCurve();
+  } catch (e) {
+    notice.textContent = "Could not load the processing timeline: " + e.message;
+    notice.style.display = "block";
+  }
+}
+
+/* Captured bytes accumulate a backlog; the backlog drains only inside
+   coverage (upstream) windows, at a constant sustainable rate. */
+function buildUploadCurve() {
+  uploadCurve = [];
+  const series = timeline.series;
+  if (!series.length) return;
+  const dur = Math.max(timeline.duration, series[series.length - 1].t) || 1;
+  const windows = timeline.upstream;
+  const windowSecs = windows.reduce((acc, w) => acc + (w.t1 - w.t0), 0);
+  const totalBytes = series[series.length - 1].bytes;
+  const rate = windowSecs > 0 ? totalBytes / windowSecs : 0;
+  const step = timeline.step || 0.25;
+  let uploaded = 0;
+  let si = 0, captured = 0;
+  for (let t = 0; t <= dur + step; t += step) {
+    while (si < series.length && series[si].t <= t) captured = series[si++].bytes;
+    const inWindow = windows.some((w) => t >= w.t0 && t <= w.t1);
+    if (inWindow) uploaded = Math.min(captured, uploaded + rate * step);
+    uploadCurve.push({ t, bytes: uploaded });
+  }
+}
+
+$("overlay-toggle").addEventListener("change", draw);
+$("overlay-opacity").addEventListener("input", () => {
+  canvas.style.opacity = $("overlay-opacity").value / 100;
+});
+["play", "seeked", "pause", "loadedmetadata"].forEach((evt) =>
+  video.addEventListener(evt, draw));
+new ResizeObserver(draw).observe(canvas);
+
+function draw() {
+  cancelAnimationFrame(rafId);
+  render();
+  if (!video.paused && !video.ended) {
+    rafId = requestAnimationFrame(draw);
+  }
+}
+
+function render() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w; canvas.height = h;
+  }
+  ctx.clearRect(0, 0, w, h);
+  if (!$("overlay-toggle").checked || !timeline) return;
+
+  const now = video.currentTime;
+  const dur = Math.max(
+    video.duration || 0, timeline.duration,
+    timeline.series.length ? timeline.series[timeline.series.length - 1].t : 0,
+  ) || 1;
+  const x = (t) => Math.min(1, t / dur) * (w - 24) + 12;
+  const chartTop = h * 0.62, chartBottom = h - 20;
+  const chartH = chartBottom - chartTop;
+  const maxBytes = timeline.series.length
+    ? timeline.series[timeline.series.length - 1].bytes : 1;
+  const y = (bytes) => chartBottom - (bytes / maxBytes) * chartH;
+
+  /* chart backing */
+  ctx.fillStyle = "rgba(13, 17, 23, 0.72)";
+  ctx.fillRect(0, chartTop - 24, w, h - chartTop + 24);
+
+  /* upstream coverage windows */
+  timeline.upstream.forEach((win) => {
+    ctx.fillStyle = "rgba(63, 185, 80, 0.18)";
+    ctx.fillRect(x(win.t0), chartTop - 18, Math.max(2, x(win.t1) - x(win.t0)),
+                 chartBottom - chartTop + 18);
+    ctx.fillStyle = "rgba(63, 185, 80, 0.9)";
+    ctx.font = "10px sans-serif";
+    ctx.fillText(win.zone, x(win.t0) + 3, chartTop - 8);
+  });
+
+  /* chunk-created markers */
+  timeline.chunks.forEach((c, i) => {
+    if (c.t > now) return;
+    const cx = x(c.t);
+    ctx.strokeStyle = "rgba(210, 153, 34, 0.9)";
+    ctx.beginPath(); ctx.moveTo(cx, chartTop); ctx.lineTo(cx, chartBottom); ctx.stroke();
+    ctx.fillStyle = "rgba(210, 153, 34, 1)";
+    ctx.font = "10px sans-serif";
+    ctx.fillText("chunk " + (i + 1), cx + 3, chartTop + 12);
+  });
+
+  /* captured-bytes line (progressive reveal) */
+  strokeSeries(timeline.series.filter((p) => p.t <= now)
+    .map((p) => [x(p.t), y(p.bytes)]), "#58a6ff");
+  /* upstreamed-bytes line */
+  strokeSeries(uploadCurve.filter((p) => p.t <= now)
+    .map((p) => [x(p.t), y(p.bytes)]), "#3fb950");
+
+  /* playhead */
+  const px = x(now);
+  ctx.strokeStyle = "rgba(230, 237, 243, 0.85)";
+  ctx.beginPath(); ctx.moveTo(px, chartTop - 18); ctx.lineTo(px, chartBottom); ctx.stroke();
+
+  /* live event caption */
+  const caption = currentCaption(now);
+  ctx.font = "600 13px sans-serif";
+  ctx.fillStyle = "rgba(230, 237, 243, 0.95)";
+  ctx.fillText(caption, 12, 22);
+
+  /* legend */
+  ctx.font = "11px sans-serif";
+  ctx.fillStyle = "#58a6ff"; ctx.fillText("● captured", 12, chartTop - 8);
+  ctx.fillStyle = "#3fb950"; ctx.fillText("● upstreamed", 80, chartTop - 8);
+  ctx.fillStyle = "#d29922"; ctx.fillText("| chunk created", 168, chartTop - 8);
+}
+
+function strokeSeries(points, color) {
+  if (points.length < 2) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(points[0][0], points[0][1]);
+  points.forEach(([px, py]) => ctx.lineTo(px, py));
+  ctx.stroke();
+  ctx.lineWidth = 1;
+}
+
+function currentCaption(now) {
+  const win = timeline.upstream.find((u) => now >= u.t0 && now <= u.t1);
+  if (win) return `⬆ Upstreaming to ${win.zone} (${timeline.network})`;
+  const recent = timeline.chunks.filter((c) => c.t <= now && now - c.t < 2.0).pop();
+  if (recent) {
+    const idx = timeline.chunks.indexOf(recent) + 1;
+    return `➕ Chunk ${idx} created — ${recent.frames} frames buffered`;
+  }
+  const kept = timeline.series.filter((p) => p.t <= now).length;
+  return kept ? `● Capturing — ${kept} frames kept` : "○ Waiting for first kept frame";
+}
+</script>
+</body>
+</html>

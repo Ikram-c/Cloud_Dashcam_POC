@@ -1,0 +1,29 @@
+Metadata-Version: 2.4
+Name: Cloud_Dashcam_POC
+Version: 0.5.0
+Summary: Quality-gated, illumination-aware, coverage-chunked frame extraction
+Requires-Python: >=3.11
+Requires-Dist: fastapi>=0.139.2
+Requires-Dist: httpx2>=2.7.0
+Requires-Dist: numpy>=1.26
+Requires-Dist: opencv-python>=4.9
+Requires-Dist: pandas>=2.1
+Requires-Dist: pytest>=9.1.1
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: requests>=2.31
+Provides-Extra: metadata
+Requires-Dist: pymediainfo>=6.0; extra == "metadata"
+Provides-Extra: ui
+Requires-Dist: fastapi>=0.110; extra == "ui"
+Requires-Dist: uvicorn>=0.29; extra == "ui"
+Provides-Extra: coverage
+Requires-Dist: gpxpy>=1.6; extra == "coverage"
+Requires-Dist: networkx>=3.0; extra == "coverage"
+Provides-Extra: gcs
+Requires-Dist: google-cloud-storage>=2.14; extra == "gcs"
+Provides-Extra: cloud
+Requires-Dist: google-cloud-aiplatform>=1.43; extra == "cloud"
+Requires-Dist: google-cloud-storage>=2.14; extra == "cloud"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: httpx>=0.27; extra == "dev"

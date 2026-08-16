@@ -1,0 +1,17 @@
+# Headless cloud/CI requirements for Cloud_Dashcam_POC.
+#
+# This file is consumed by GCP_Cloud_Send's "Requirements File" environment
+# option when the repo is submitted as a Vertex AI Custom Job (the same
+# deployment path used for the cctv_zarr model). It deliberately uses
+# opencv-python-headless (no libGL needed inside training containers) and
+# omits the web UI / dev extras.
+numpy>=1.26
+opencv-python-headless>=4.9
+pandas>=2.1
+pyyaml>=6.0
+requests>=2.31
+# coverage chunking (pipeline imports these at module load)
+gpxpy>=1.6
+networkx>=3.0
+# real GCS telemetry (optional at runtime; mock client used otherwise)
+google-cloud-storage>=2.14

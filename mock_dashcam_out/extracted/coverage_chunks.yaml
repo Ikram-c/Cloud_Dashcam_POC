@@ -1,0 +1,9 @@
+network: vodafone
+zones:
+  urban_4g:
+  - video: /Users/ikramchoudhury/Cloud_Dashcam_POC/mock_dashcam_out/fixtures/videos/CAR01_20240315_083000_CAM01.mp4
+    start: 0
+    end: 151
+  - video: /Users/ikramchoudhury/Cloud_Dashcam_POC/mock_dashcam_out/fixtures/videos/CAR01_20240315_120000_CAM01.mp4
+    start: 0
+    end: 151

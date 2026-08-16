@@ -363,6 +363,7 @@ frame-extract-ui --config config.yaml     # open http://127.0.0.1:8321
 ```
 
 - Five-screen flow: welcome → **Run local demo** (fixtures, mock telemetry, all gates) → **Select video file** (paths, GPX source, mobile network, sampling, gate toggles) → live progress → results with per-zone coverage chips.
+- **Footage review overlay** — post a video of your footage on the review screen and a semi-transparent line chart replays, in step with playback, how the pipeline processed it: cumulative frames/bytes captured, chunk-creation markers (from `kept_slices.yaml`), and shaded per-zone upstream windows with a simulated backlog drain (from `coverage_chunks.yaml`). Served by `GET /api/timeline`, derived entirely from the last run's real artifacts; toggle and opacity slider included.
 - One job at a time (409 on concurrent launch); toggles can only *disable* what config enables. Keep `ui.host: 127.0.0.1` unless you intend network exposure — the API accepts filesystem paths.
 
 ### Parallel mode

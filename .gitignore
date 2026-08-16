@@ -1,0 +1,17 @@
+# environments
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# run artifacts
+test_data/
+extracted_frames/
+mock_dashcam_out/
+vertex_run_out/
+input/
+forecast_cache.json
+
+# OS
+.DS_Store
